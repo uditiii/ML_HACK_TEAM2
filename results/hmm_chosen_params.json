@@ -1,0 +1,13 @@
+{
+  "params": {
+    "p_stay": 0.8,
+    "p_move": 0.2,
+    "MAX_HOPS": 3,
+    "HOP_PENALTY": 2.0,
+    "UTURN_PENALTY": 3.0,
+    "EPS": 1e-06,
+    "renormalise": true
+  },
+  "model": "data\\models\\random_forest.joblib",
+  "searched": true
+}

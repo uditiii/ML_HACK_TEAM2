@@ -1,0 +1,3 @@
+partition,label_method,n_trips,n_trips_total,n_obs,pct_unlabelled,mean_candidates_per_obs,pct_obs_zero_candidates,total_rows,positive_rate,candidate_miss_rate
+train,v2,80,80,41713,10.802387744827751,8.977249298779757,8.743077697600269,374468,0.09935962485446019,0.0
+student_test,v2,10,10,19160,0.1409185803757829,10.938361169102297,0.0,209579,0.09129254362316835,0.0
