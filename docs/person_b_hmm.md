@@ -26,6 +26,11 @@ The HMM adds the missing information: **the order of the points and how the road
   classifier probability for that candidate. With `renormalise = True`, a point's probabilities are first
   divided by their sum, so every point gives the decoder the same total "vote". The clip stops
   `log(0) = -infinity` from forbidding an arc completely.
+  **Emission weight:** the log emission is multiplied by `EMISSION_WEIGHT` (1 = plain HMM). A value below 1
+  tells the decoder to trust the classifier less relative to the road graph. This matters for the tuned final
+  forest: it is deeper and more confident, so at weight 1 its probabilities can overrule the connectivity
+  evidence that fixes direction errors. The weight is chosen by the same train-only search as the penalties.
+  Mathematically, scaling the emissions by w gives the same best path as scaling all transition scores by 1/w.
 * **Transition** (how plausible it is to go from arc *a* at one point to arc *b* at the next):
 
 | Case | Score (log) | Meaning |
@@ -83,7 +88,7 @@ to that i scores lower and can be thrown away. This is the dynamic-programming p
 ## Parameter choice (no evaluator data)
 
 Grid: `p_stay ∈ {0.5, 0.6, 0.8}` (with `p_move = 1 − p_stay`), `HOP_PENALTY ∈ {0.5, 1, 2}`,
-`UTURN_PENALTY ∈ {1, 3, 6}`: 27 settings, on 15 randomly chosen TRAIN trips (seed 42) at full rate.
+`UTURN_PENALTY ∈ {1, 3, 6}`, `EMISSION_WEIGHT ∈ {1, 0.5, 0.25}`: 81 settings, on 15 randomly chosen TRAIN trips (seed 42) at full rate.
 Selection = highest pooled observation-level Top-1. **The train trips are scored out-of-fold**: each trip
 gets probabilities from a forest refitted without that trip's CV fold (`results/folds.csv`), because
 in-sample probabilities are over-confident and would make the HMM trust emissions too much. The chosen
@@ -126,6 +131,9 @@ say so: a wider grid is future work.
   map would otherwise make every path impossible.
 * *Why restart at gaps?* Over a 30+ s gap the vehicle may have taken any road; forcing a connection
   would invent a route.
+* *Why an emission weight?* A better classifier by macro-F1 is not automatically better inside the HMM: a more
+  confident model leaves the decoder less room to use the road graph. Down-weighting emissions (chosen on train
+  only) restores that balance. Compare the student_test rows with and without it if asked.
 * *Why out-of-fold scores for tuning?* The forest has seen the train trips; its in-sample probabilities
   are too confident, which would bias the HMM towards ignoring transitions.
 * *Limitations:* fixed hand-set transition form; hop count ignores arc lengths and speed; continuity

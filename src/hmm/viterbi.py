@@ -3,8 +3,10 @@
 Hidden state at GPS point t = one of that point's candidate arcs (within 50 m).
 Observation = the GPS point; how well an arc explains it = the classifier probability.
 
-  emission     log P(point t | arc)  = log(clip(p, 1e-6, 1)), p = classifier probability
-               (optionally renormalised so a point's candidate probabilities sum to 1)
+  emission     log P(point t | arc)  = EMISSION_WEIGHT * log(clip(p, 1e-6, 1)), p = classifier probability
+               (optionally renormalised so a point's candidate probabilities sum to 1).
+               EMISSION_WEIGHT < 1 trusts an over-confident classifier less relative to the road graph
+               (1.0 = the plain HMM).
   transition   log P(arc b at t+1 | arc a at t):
                  b == a                          -> log(p_stay)                 (still on the same arc)
                  b is the reverse arc of a       -> log(p_move) - UTURN_PENALTY (U-turn: allowed, discouraged)
@@ -29,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 DEFAULT_PARAMS = {"p_stay": 0.6, "p_move": 0.4, "MAX_HOPS": 3, "HOP_PENALTY": 1.0,
-                  "UTURN_PENALTY": 3.0, "EPS": 1e-6, "renormalise": True}
+                  "UTURN_PENALTY": 3.0, "EPS": 1e-6, "renormalise": True, "EMISSION_WEIGHT": 1.0}
 SECONDS_PER_EXTRA_HOP = 5.0   # max_hops_t = MAX_HOPS + int(dt / 5)
 PROBA_FLOOR = 1e-6            # emission: log(clip(p, 1e-6, 1))
 
@@ -180,13 +182,14 @@ def prepare_chains(cand_df, proba, arcs, clean_track, params=None, graph=None):
 def viterbi_chain(chain, params):
     """Standard Viterbi in log space on one chain. Returns the best arc for each of its points."""
     n = len(chain["obs"])
-    delta = emission_logprob(chain["proba"][0], params["renormalise"])
+    w = params.get("EMISSION_WEIGHT", 1.0)
+    delta = w * emission_logprob(chain["proba"][0], params["renormalise"])
     psi = [None] * n
     for k in range(1, n):
         score = delta[:, None] + transition_logprob(chain["rel"][k], params)   # (n_prev x n_curr)
         best_prev = score.argmax(axis=0)                                       # backpointer per current arc
-        delta = score[best_prev, np.arange(score.shape[1])] + emission_logprob(chain["proba"][k],
-                                                                                params["renormalise"])
+        delta = score[best_prev, np.arange(score.shape[1])] + w * emission_logprob(chain["proba"][k],
+                                                                                    params["renormalise"])
         psi[k] = best_prev
     path = np.empty(n, dtype=np.int64)
     j = int(delta.argmax())
