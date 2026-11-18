@@ -24,15 +24,35 @@ API_URL = os.environ.get("API_URL", "http://localhost:8000").rstrip("/")
 TRIPS_TIMEOUT_S = 10
 PREDICT_TIMEOUT_S = 300
 
-# metric key in the API response -> (label, is_fraction)
+# metric key in the API response (team contract) -> (label, is_fraction)
 METRICS = {
     "top1_classifier": ("Top-1 accuracy, classifier", True),
     "top1_hmm": ("Top-1 accuracy, HMM", True),
-    "continuity_classifier": ("Route continuity, classifier", True),
-    "continuity_hmm": ("Route continuity, HMM", True),
+    "route_continuity_classifier": ("Route continuity, classifier", True),
+    "route_continuity_hmm": ("Route continuity, HMM", True),
     "n_points": ("GPS points", False),
     "runtime_s": ("Runtime (s)", False),
 }
+
+
+def metric_value(res, key):
+    """Contract: metrics.route_continuity_* and top-level n_points. Older names (the stub's
+    continuity_* and metrics.n_points) are still accepted."""
+    m = res.get("metrics") or {}
+    for k in (key, key.replace("route_", "")):
+        if k in m:
+            return m[k]
+    return res.get(key)
+
+
+def arc_ids(predicted_arcs):
+    """Contract: [{"obs_idx": i, "arc_id": a}, ...]; plain ints (stub) also accepted. -1 = no candidate."""
+    out = []
+    for a in predicted_arcs or []:
+        a = a.get("arc_id") if isinstance(a, dict) else a
+        if a is not None and int(a) >= 0:
+            out.append(int(a))
+    return out
 
 st.set_page_config(page_title="PathSnap", layout="wide")
 st.title("PathSnap: route reconstruction from GPS")
@@ -94,11 +114,10 @@ if run:
 
 res = st.session_state.get("result")
 if res and res.get("trip_id") == trip_id:
-    metrics = res.get("metrics", {})
     st.subheader(f"Results for trip {trip_id}")
     cols = st.columns(len(METRICS))
     for col, (key, (label, frac)) in zip(cols, METRICS.items()):
-        col.metric(label, fmt(metrics.get(key), frac))
+        col.metric(label, fmt(metric_value(res, key), frac))
 
     gps = res.get("gps") or []
     pred_coords = res.get("predicted_route_coords") or []
@@ -108,7 +127,7 @@ if res and res.get("trip_id") == trip_id:
     else:
         st.info("The API response has no GPS points to draw.")
 
-    raw = [int(a) for a in (res.get("predicted_arcs") or []) if a is not None and int(a) >= 0]
+    raw = arc_ids(res.get("predicted_arcs"))
     arcs = [a for i, a in enumerate(raw) if i == 0 or a != raw[i - 1]]   # collapse per-point repeats
     st.markdown(f"**First 20 predicted arcs** (of {len(arcs):,} distinct consecutive arcs)")
     st.dataframe(pd.DataFrame({"step": range(1, min(20, len(arcs)) + 1), "arc_id": arcs[:20]}),

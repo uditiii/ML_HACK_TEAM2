@@ -1,0 +1,30 @@
+PERSON C FILES v2 (features v2 + feature selection + predict pipeline + API, works with D's final model)
+Also contains a small fix to Person A's ui/app.py (see 4).
+
+1. git pull on main first. Unzip INTO THE REPO ROOT (folder with src/, scripts/, config.py), overwrite files.
+   Modified: src/features/build_features.py, src/features/feature_list.py, tests/test_build_features.py,
+             notebooks/03_feature_selection.ipynb, results/feature_selection.md, .gitignore, ui/app.py
+   New:      src/pipeline/__init__.py, src/pipeline/predict.py, api/__init__.py, api/main.py,
+             scripts/train_interim_model.py, scripts/test_api.py, docs/person_c_pipeline_api.md, requirements.txt
+
+2. Run from the repo root, one at a time (PowerShell):
+     python -m pip install -r requirements.txt
+     python -m pytest -q tests/test_build_features.py        -> all passed
+     python scripts/build_candidates.py                       (only if data/processed is missing)
+     python scripts/build_tables.py                           -> train/test tables with 12 features
+     (run notebooks/03_feature_selection.ipynb top to bottom) -> results/feature_selection.csv, feature_list.py
+     $env:EVAL_DIR = "data/raw/Student folder/student_test"
+     uvicorn api.main:app --host 0.0.0.0 --port 8000           (loads artifacts/models/final_model.joblib)
+   In a second terminal:
+     python scripts/test_api.py                               -> ALL API CHECKS PASSED
+
+3. predict_trip builds features the way the model was trained: D's final model uses the 5 quick features,
+   so it calls add_quick_features automatically (src/features/quick_features.py). No train_table needed.
+   HMM settings come from results/hmm_chosen_params.json (Person B); restart the API after B updates it.
+
+4. ui/app.py (Person A): the UI did int(a) on predicted_arcs, but the contract sends {"obs_idx", "arc_id"}
+   objects -> it would crash. It also read continuity_* / metrics.n_points instead of route_continuity_* /
+   top-level n_points. Fixed to read the contract format; A's stub API format still works. A please review.
+   Test: API running, then   $env:API_URL = "http://localhost:8000"; streamlit run ui/app.py
+
+Explanations for the viva: docs/person_c_pipeline_api.md
