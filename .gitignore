@@ -3,3 +3,6 @@ data/
 __pycache__/
 *.pyc
 __pycache__/
+
+# interim test model (large, not the final model)
+artifacts/models/interim_model*

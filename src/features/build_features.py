@@ -59,6 +59,7 @@ ALL_FEATURES = [
     "gps_bearing",
     "arc_bearing",
     "heading_diff_deg",
+    "heading_rank",
     "speed_mps",
     "heading_valid",
     "proj_t",
@@ -280,6 +281,16 @@ def heading_difference(gps_bearing, arc_bearing, heading_valid) -> np.ndarray:
     return np.where(np.asarray(heading_valid) == 1, diff, NEUTRAL_HEADING_DEG)
 
 
+def heading_rank(df: pd.DataFrame) -> np.ndarray:
+    """Rank of heading_diff_deg among the candidates of the same GPS point (1 = best aligned).
+
+    Like dist_rank, this is relative: "is this the arc that points most nearly the way we move,
+    compared with the other arcs here?" Ties share the lowest rank (method "min"); when the
+    vehicle is stationary every candidate has the neutral 90 deg, so all get rank 1.
+    """
+    return df.groupby(OBS_KEY, sort=False)["heading_diff_deg"].rank(method="min").to_numpy().astype(np.int32)
+
+
 def assert_feature_list_leak_free(features) -> None:
     bad = [f for f in features if f in FORBIDDEN_COLS]
     assert not bad, f"label/route columns in feature list: {bad}"
@@ -297,6 +308,7 @@ def assert_features_clean(df: pd.DataFrame, features=ALL_FEATURES) -> None:
         assert df["dist_rank"].min() >= 1 and df["n_candidates"].min() >= 1
         assert (df["dist_minus_min"] >= -1e-9).all()
         assert df["heading_diff_deg"].between(0, 180).all()
+        assert df["heading_rank"].min() >= 1 and (df["heading_rank"] <= df["n_candidates"]).all()
         assert set(df["heading_valid"].unique()) <= {0, 1}
         assert (df.loc[df["heading_valid"] == 0, "heading_diff_deg"] == NEUTRAL_HEADING_DEG).all()
         assert df["arc_bearing"].between(0, 360).all() and df["gps_bearing"].between(0, 360).all()
@@ -348,6 +360,7 @@ def add_features(cand_df: pd.DataFrame, trip, clean_track: pd.DataFrame, project
 
     # 4) heading agreement (neutral 90 when the vehicle is (nearly) stationary)
     out["heading_diff_deg"] = heading_difference(out["gps_bearing"], out["arc_bearing"], out["heading_valid"])
+    out["heading_rank"] = heading_rank(out)                     # 1 = best aligned arc of this GPS point
 
     assert_features_clean(out)
     return out
