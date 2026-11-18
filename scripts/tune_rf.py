@@ -1,6 +1,8 @@
 """Bayesian hyperparameter optimisation (Optuna, TPE sampler) for Random Forest.
-Objective: mean macro-F1 over our 5 fixed GroupKFold folds (results/folds.csv), train trips only."""
-import json, sys, time
+Objective: mean macro-F1 over our 5 fixed GroupKFold folds (results/folds.csv), train trips only.
+Usage:  python scripts/tune_rf.py        (v1: 5 distance features)
+        python scripts/tune_rf.py v2     (v2: C's feature list, needs train_table/test_table)"""
+import json, os, shutil, sys, time
 from datetime import datetime
 from pathlib import Path
 import joblib, numpy as np, optuna, pandas as pd
@@ -11,26 +13,29 @@ from sklearn.metrics import f1_score
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.models.experiment import load_folds, run_experiment
+from src.features.quick_features import add_quick_features
 
-FEATURES = ["dist_m", "proj_t", "dist_rank", "dist_minus_min", "n_candidates"]
+FEATURE_SET = sys.argv[1] if len(sys.argv) > 1 else "v1"
+if FEATURE_SET == "v2":
+    from src.features.feature_list import FEATURES
+else:
+    from src.features.quick_features import FEATURES
+
 SEED = 42
 N_TRIALS = 25
 TIMEOUT_S = 35 * 60          # stop after 35 min even if trials remain
 MAX_FIT_ROWS = 100_000       # per-fold training subsample during the search (speed)
-
-
-def quick_feats(df):
-    g = df.groupby(["trip_id", "obs_idx"])["dist_m"]
-    df["dist_rank"] = g.rank(method="min")
-    df["dist_minus_min"] = df["dist_m"] - g.transform("min")
-    df["n_candidates"] = g.transform("size")
-    return df
+RESULTS_CSV = "results/model_results.csv" if FEATURE_SET == "v1" else f"results/model_results_{FEATURE_SET}.csv"
 
 
 def load_data():
     P = Path("data/processed")
-    train = quick_feats(pd.read_parquet(P / "candidates_train.parquet"))
-    test = quick_feats(pd.read_parquet(P / "candidates_student_test.parquet"))
+    if FEATURE_SET == "v2":
+        train = pd.read_parquet(P / "train_table.parquet")
+        test = pd.read_parquet(P / "test_table.parquet")
+    else:
+        train = add_quick_features(pd.read_parquet(P / "candidates_train.parquet"))
+        test = add_quick_features(pd.read_parquet(P / "candidates_student_test.parquet"))
     obs_tr = pd.read_parquet(P / "obs_train.parquet")
     obs_te = pd.read_parquet(P / "obs_student_test.parquet")
     for d in (train, test, obs_tr, obs_te):
@@ -76,35 +81,41 @@ def main():
     train, test, obs_tr, obs_te = load_data()
     folds = load_folds("results/folds.csv")
     Path("results/figures").mkdir(parents=True, exist_ok=True)
+    print(f"Feature set {FEATURE_SET}: {FEATURES}")
 
-    study = optuna.create_study(direction="maximize", study_name="rf_macro_f1",
+    study = optuna.create_study(direction="maximize", study_name=f"rf_macro_f1_{FEATURE_SET}",
                                 sampler=optuna.samplers.TPESampler(seed=SEED),
                                 pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1))
     t0 = time.perf_counter()
     study.optimize(make_objective(train, folds), n_trials=N_TRIALS, timeout=TIMEOUT_S)
     search_time = time.perf_counter() - t0
 
-    study.trials_dataframe().to_csv("results/optuna_trials.csv", index=False)
+    sfx = "" if FEATURE_SET == "v1" else f"_{FEATURE_SET}"
+    study.trials_dataframe().to_csv(f"results/optuna_trials{sfx}.csv", index=False)
     best = study.best_params
     print(f"\nBest (search) CV macro-F1: {study.best_value:.4f}  params: {best}  search time: {search_time:.0f}s")
 
     from optuna.visualization.matplotlib import plot_optimization_history, plot_param_importances
-    plot_optimization_history(study); plt.savefig("results/figures/optuna_history.png", dpi=150, bbox_inches="tight"); plt.close("all")
+    plot_optimization_history(study); plt.savefig(f"results/figures/optuna_history{sfx}.png", dpi=150, bbox_inches="tight"); plt.close("all")
     try:
-        plot_param_importances(study); plt.savefig("results/figures/optuna_param_importance.png", dpi=150, bbox_inches="tight"); plt.close("all")
+        plot_param_importances(study); plt.savefig(f"results/figures/optuna_param_importance{sfx}.png", dpi=150, bbox_inches="tight"); plt.close("all")
     except Exception as e:
         print("param-importance plot skipped:", e)
 
     # Fair comparison: same protocol as the untuned random_forest row (full train, same folds, same test)
     tuned = RandomForestClassifier(**best, n_jobs=-1, random_state=SEED)
-    run_experiment(tuned, "random_forest_tuned", "Ensemble", {**best, "tuning": "optuna_tpe"},
-                   train, test, obs_tr, obs_te, FEATURES, folds, results_path="results/model_results.csv")
+    run_experiment(tuned, f"random_forest_tuned{sfx}", "Ensemble", {**best, "tuning": "optuna_tpe"},
+                   train, test, obs_tr, obs_te, FEATURES, folds, results_path=RESULTS_CSV)
 
     final = RandomForestClassifier(**best, n_jobs=-1, random_state=SEED).fit(train[FEATURES], train["label"])
     Path("artifacts/models").mkdir(parents=True, exist_ok=True)
+    if FEATURE_SET == "v2" and os.path.exists("artifacts/models/final_model.joblib") \
+            and not os.path.exists("artifacts/models/final_model_v1.joblib"):
+        shutil.copy("artifacts/models/final_model.joblib", "artifacts/models/final_model_v1.joblib")
+        shutil.copy("artifacts/models/final_model_meta.json", "artifacts/models/final_model_v1_meta.json")
     joblib.dump(final, "artifacts/models/final_model.joblib", compress=3)
-    meta = {"model": "RandomForestClassifier", "features": FEATURES, "params": best,
-            "search_cv_macro_f1": study.best_value, "n_trials_run": len(study.trials),
+    meta = {"model": "RandomForestClassifier", "feature_set": FEATURE_SET, "features": list(FEATURES),
+            "params": best, "search_cv_macro_f1": study.best_value, "n_trials_run": len(study.trials),
             "sampler": "TPE (seed 42)", "pruner": "MedianPruner", "search_fit_rows_per_fold": MAX_FIT_ROWS,
             "search_time_s": round(search_time, 1), "trained_on": "train (all 80 trips, every 5th point)",
             "label_method": "v2", "date": datetime.now().isoformat()}
