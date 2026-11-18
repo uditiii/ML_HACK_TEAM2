@@ -70,7 +70,7 @@ def build_report_map(trip_id, predict_trip, model, meta, label=""):
     clean, rep = clean_track(trip["track"])
 
     result = predict_trip(TRIP_ROOT, trip_id, model, meta, use_hmm=True)
-    pred_ids = np.asarray(result["predicted_arcs"], dtype=np.int64)
+    pred_ids = np.asarray([a["arc_id"] if isinstance(a, dict) else a for a in result["predicted_arcs"]], dtype=np.int64)
     pred_ids = pred_ids[(pred_ids >= 0) & (pred_ids < len(arcs))]   # -1 = point had no candidate
     pred = arcs_to_polylines(nodes, arcs, pred_ids)
     ref = arcs_to_polylines(nodes, arcs, trip["route"]["arc_id"]) if trip["route"] is not None else None
