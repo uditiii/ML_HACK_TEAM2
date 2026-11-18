@@ -129,6 +129,13 @@ def test_add_obs_rank_features():
     assert r["n_candidates"].tolist() == [3, 3, 3, 2, 2]
 
 
+# ---- heading_rank -------------------------------------------------------------
+def test_heading_rank():
+    df = pd.DataFrame({"trip_id": ["a"] * 5, "obs_idx": [0, 0, 0, 1, 1],
+                       "heading_diff_deg": [170.0, 5.0, 5.0, 90.0, 90.0]})
+    assert bf.heading_rank(df).tolist() == [3, 1, 1, 1, 1]          # ties share the best rank; stationary -> all 1
+
+
 # ---- heading_difference ------------------------------------------------------
 def test_heading_difference():
     h = bf.heading_difference([350, 90, 10], [10, 270, 20], [1, 1, 0])
