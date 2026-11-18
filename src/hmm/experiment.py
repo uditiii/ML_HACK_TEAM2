@@ -9,6 +9,8 @@ they never reach features, the classifier or the decoder.
 Model: artifacts/models/final_model.joblib + final_model_meta.json if they exist; otherwise the
 Phase 1 random forest (data/models/random_forest.joblib, written by scripts/run_quick_models.py)
 with the 5 Phase 1 features. Which one was used is printed and saved with every result.
+Features are built the way the model was trained: the 5 quick features with add_quick_features
+(src/features/quick_features.py), any other feature list with Person C's add_features.
 """
 import itertools
 import json
@@ -26,15 +28,18 @@ from src.candidates.generate import generate_candidates
 from src.candidates.labels import label_points
 from src.hmm.viterbi import (DEFAULT_PARAMS, RoadGraph, classifier_only, continuity_counts,
                              decode_prepared, prepare_chains, top1_counts)
+from src.features.quick_features import FEATURES as QUICK_FEATURES
+from src.features.quick_features import add_quick_features
 from src.models.experiment import load_folds
 
 ROOT = Path(__file__).resolve().parents[2]
 FINAL_MODEL = ROOT / "artifacts" / "models" / "final_model.joblib"
 FINAL_META = ROOT / "artifacts" / "models" / "final_model_meta.json"
 PHASE1_MODEL = ROOT / "data" / "models" / "random_forest.joblib"
-PHASE1_FEATURES = ["dist_m", "proj_t", "dist_rank", "dist_minus_min", "n_candidates"]
+PHASE1_FEATURES = list(QUICK_FEATURES)
 
-GRID = {"p_stay": [0.5, 0.6, 0.8], "HOP_PENALTY": [0.5, 1.0, 2.0], "UTURN_PENALTY": [1.0, 3.0, 6.0]}
+GRID = {"p_stay": [0.5, 0.6, 0.8], "HOP_PENALTY": [0.5, 1.0, 2.0], "UTURN_PENALTY": [1.0, 3.0, 6.0],
+        "EMISSION_WEIGHT": [1.0, 0.5, 0.25]}
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -56,20 +61,19 @@ def load_scorer():
                             "Phase 1 forest: python scripts/run_quick_models.py --models random_forest")
 
 
-def quick_feats(df):
-    """Phase 1 features (same as scripts/run_quick_models.py): distance rank, gap to the best, count."""
-    df = df.copy()
-    g = df.groupby(["trip_id", "obs_idx"])["dist_m"]
-    df["dist_rank"] = g.rank(method="min")
-    df["dist_minus_min"] = df["dist_m"] - g.transform("min")
-    df["n_candidates"] = g.transform("size")
-    return df
+def uses_quick_features(scorer):
+    """True if every model feature is one of the 5 quick features (D's final model, Phase 1 forest)."""
+    return set(scorer["features"]) <= set(QUICK_FEATURES)
 
 
 def add_model_features(cand, trip, clean, scorer):
-    """Feature columns for one trip's candidates. Only track + road network are used."""
-    if scorer["kind"] == "phase1":
-        return quick_feats(cand)
+    """Feature columns for one trip's candidates, built the SAME way the model was trained.
+
+    5 quick features -> src/features/quick_features.add_quick_features (candidate table only);
+    anything else    -> Person C's add_features (track + road network). Never the route or labels.
+    """
+    if uses_quick_features(scorer):
+        return add_quick_features(cand.copy())
     from src.features.build_features import add_features          # Person C
     return add_features(cand, {"nodes": trip["nodes"], "arcs": trip["arcs"]}, clean)
 
@@ -77,8 +81,8 @@ def add_model_features(cand, trip, clean, scorer):
 def training_table(scorer):
     """The table the scorer was trained on (train trips, every 5th point), with its features."""
     proc = ROOT / "data" / "processed"
-    if scorer["kind"] == "phase1":
-        df = quick_feats(pd.read_parquet(proc / "candidates_train.parquet"))
+    if uses_quick_features(scorer):
+        df = add_quick_features(pd.read_parquet(proc / "candidates_train.parquet"))
     else:
         df = pd.read_parquet(proc / "train_table.parquet")
     df["trip_id"] = df["trip_id"].astype(str)
