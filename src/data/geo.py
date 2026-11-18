@@ -85,3 +85,10 @@ if __name__ == "__main__":
     assert abs(dist - 1) < 1e-12 and abs(t - 0.5) < 1e-12
     print(f"geo.py OK  | 1 deg lat = {d:.0f} m | projector vs haversine on ~900 m hop: "
           f"{np.hypot(x, y):.2f} vs {h:.2f} m")
+
+
+def bearing_deg(dx, dy):
+    """Compass bearing of a displacement (dx east, dy north) in degrees, in [0, 360).
+    0 = north, 90 = east. (Team contract function; added by Person B.)"""
+    b = np.mod(np.degrees(np.arctan2(dx, dy)), 360.0)
+    return np.where(b >= 360.0, b - 360.0, b)
