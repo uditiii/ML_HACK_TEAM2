@@ -2,7 +2,7 @@
 
     python scripts/make_report_maps.py
     python scripts/make_report_maps.py --trips 00000052 00000056 00000065
-    python scripts/make_report_maps.py --model data/models/final_model.joblib --meta data/models/final_meta.json
+    python scripts/make_report_maps.py --model artifacts/models/final_model.joblib --meta artifacts/models/final_model_meta.json
 
 Needs Person C's src/pipeline/predict.py:
     predict_trip(trip_dir_root, trip_id, model, meta, use_hmm=True) -> dict with "predicted_arcs"
@@ -31,8 +31,8 @@ from src.visualisation.maps import (MAPS_DIR, arcs_to_polylines,  # noqa: E402
 
 PARTITION = "student_test"
 TRIP_ROOT = Path(DATA_ROOT) / PARTITION
-DEFAULT_MODEL = ROOT / "data" / "models" / "final_model.joblib"
-DEFAULT_META = ROOT / "data" / "models" / "final_meta.json"
+DEFAULT_MODEL = ROOT / "artifacts" / "models" / "final_model.joblib"
+DEFAULT_META = ROOT / "artifacts" / "models" / "final_model_meta.json"
 
 
 def load_model_and_meta(model_path: Path, meta_path: Path):
