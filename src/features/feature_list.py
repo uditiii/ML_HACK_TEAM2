@@ -1,6 +1,6 @@
-# PROVISIONAL feature list (all engineered features) so downstream code can import it right away.
-# notebooks/03_feature_selection.ipynb OVERWRITES this file from the TRAIN table once it has been run
-# on the real train_table.parquet. Do not edit by hand after that.
+# Final model features. Auto-written by notebooks/03_feature_selection.ipynb from the TRAIN table only.
+# Rule: drop a feature only if |Spearman rho| > 0.9 with a stronger feature AND it is below the median on
+# f_score, mutual_info and rf_importance. Sample seed 42, <= 200k stratified rows.
 
 FEATURES = [
     "dist_m",
@@ -14,7 +14,7 @@ FEATURES = [
     "heading_rank",
     "speed_mps",
     "heading_valid",
-    "proj_t",
+    "proj_t"
 ]
 
 DROPPED = []
