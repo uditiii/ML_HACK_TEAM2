@@ -4,11 +4,11 @@
     "p_move": 0.2,
     "MAX_HOPS": 3,
     "HOP_PENALTY": 2.0,
-    "UTURN_PENALTY": 1.0,
+    "UTURN_PENALTY": 6.0,
     "EPS": 1e-06,
     "renormalise": true,
     "EMISSION_WEIGHT": 0.25
   },
-  "model": "artifacts\\models\\final_model.joblib",
+  "model": "artifacts/models/final_model.joblib",
   "searched": true
 }
