@@ -1,0 +1,26 @@
+{
+  "model": "RandomForestClassifier",
+  "features": [
+    "dist_m",
+    "proj_t",
+    "dist_rank",
+    "dist_minus_min",
+    "n_candidates"
+  ],
+  "params": {
+    "n_estimators": 200,
+    "max_depth": 19,
+    "min_samples_leaf": 1,
+    "max_features": 4,
+    "class_weight": "balanced_subsample"
+  },
+  "search_cv_macro_f1": 0.7948711011479539,
+  "n_trials_run": 25,
+  "sampler": "TPE (seed 42)",
+  "pruner": "MedianPruner",
+  "search_fit_rows_per_fold": 100000,
+  "search_time_s": 873.2,
+  "trained_on": "train (all 80 trips, every 5th point)",
+  "label_method": "v2",
+  "date": "2026-11-18T13:37:51.797708"
+}
