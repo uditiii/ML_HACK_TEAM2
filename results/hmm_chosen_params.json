@@ -4,10 +4,11 @@
     "p_move": 0.2,
     "MAX_HOPS": 3,
     "HOP_PENALTY": 2.0,
-    "UTURN_PENALTY": 3.0,
+    "UTURN_PENALTY": 1.0,
     "EPS": 1e-06,
-    "renormalise": true
+    "renormalise": true,
+    "EMISSION_WEIGHT": 0.25
   },
-  "model": "data\\models\\random_forest.joblib",
+  "model": "artifacts\\models\\final_model.joblib",
   "searched": true
 }
